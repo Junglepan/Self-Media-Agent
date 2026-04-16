@@ -24,17 +24,43 @@ Schema  = 告诉 Agent "你是谁、怎么做事"（宪法）
 
 | Skill | 触发方式 | 做什么 |
 |-------|----------|--------|
-| `photographer` | `/skill photographer` | 用户描述场景，Agent 以角色身份输出文案 |
-| `learn` | `/skill learn` | 读取新素材，提炼知识写入 wiki，重写角色画像 |
-| `analyze` | `/skill analyze` | 拆解一段文案的结构、技巧、审美、世界观 |
+| `photographer` | `/skill photographer` | 用户描述场景，角色输出文案 |
+| `learn` | `/skill learn` 或定时调度 | 消化新素材，提炼知识写入 wiki |
+| `analyze` | `/skill analyze` | 拆解一段文案的结构/技巧/审美 |
+| `seed` | `/skill seed` | 手动注入一篇帖子，立即提炼 |
+| `converge` | `/skill converge` | 处理 wiki 中的矛盾条目 |
+| `audit` | `/skill audit` | Wiki 质量审计，出报告 |
+| `status` | `/skill status` | 一眼看清角色当前积累状态 |
 
 所有 Skill 的完整指令在 [`prompts/`](prompts/) 目录。
+
+### Skill 之间的关系
+
+```
+定时 / 手动
+    │
+    ▼
+/skill learn ──► 消化 raw/ → 更新 wiki/ → 重写 persona.md
+    │                                          │
+    │            /skill seed ──────────────────┘
+    │            （手动注入单篇）
+    │
+    ├── 有 [待收敛]？ ──► /skill converge（收敛矛盾）
+    ├── 质量有疑问？  ──► /skill audit（只出报告）
+    └── 想看现状？   ──► /skill status（只读）
+
+用户描述场景
+    │
+    ▼
+/skill photographer ──► 检索 wiki/（只读）──► 输出文案
+/skill analyze      ──► 检索 wiki/（只读）──► 输出分析
+```
 
 ---
 
 ## Agent 的记忆（Wiki）
 
-角色由七个维度构成，所有维度持续被 `/skill learn` 喂养和演化：
+角色由七个维度构成，所有维度持续被 `/skill learn` 和 `/skill seed` 喂养和演化：
 
 | 维度 | 文件 | 内容 |
 |------|------|------|
@@ -62,39 +88,44 @@ Schema 由人类维护，Agent 不在常规运行中修改 schema/。
 
 ---
 
-## 两条链路
+## 外部工具（MCP）
 
-### 链路一：学习（`/skill learn`）
+Agent 通过 MCP 访问外部系统。当前接入：
 
+| Server | 规范 | 用途 |
+|--------|------|------|
+| 小红书 Connector | [`mcp/xiaohongshu.md`](mcp/xiaohongshu.md) | 拉取高赞摄影帖子 |
+
+MCP 仅在 `/skill learn` 的 Step 2 中调用；创作/分析链路不依赖 MCP。
+降级行为：MCP 不可用时，`/skill learn` 跳过拉取，仅重写 persona.md。
+
+配置方式见 [`mcp/README.md`](mcp/README.md)。
+
+---
+
+## 调度
+
+### 自动调度（GitHub Actions）
+
+`.github/workflows/learn.yml` 每天 **UTC 02:00**（北京时间 10:00）自动触发 `/skill learn`。
+
+### 手动调度
+
+两种方式均可：
+
+```bash
+# 方式一：GitHub CLI
+gh workflow run learn.yml
+
+# 方式二：GitHub UI
+# Actions → Learn — Daily Knowledge Distillation → Run workflow
 ```
-用户或定时触发 /skill learn
-        ↓
-Agent 读取 schema/update-rules.md（唯一准则）
-        ↓
-通过 MCP 拉取小红书高赞帖子 → 写入 raw/（只追加）
-        ↓
-逐帖提炼候选条目 → 五项 Gate 过筛
-        ↓
-通过的条目合并到 wiki/（查重、升级置信度、标矛盾）
-        ↓
-重写 wiki/persona.md → 更新 state/last_run.json
+
+也可以在 Claude Code 终端直接运行：
+
+```bash
+/skill learn
 ```
-
-**raw/ 是事实层，不可修改；wiki/ 是解释层，持续演化。**
-
-### 链路二：创作（`/skill photographer`）
-
-```
-用户 /skill photographer 描述场景
-        ↓
-Agent 读取 prompts/photographer.md
-        ↓
-按需检索 wiki/（persona → 按场景按需读子文件）
-        ↓
-以角色身份输出文案（标题 × 3 / 正文 / 标签 / 角色自述）
-```
-
-创作链路**只读 wiki，不修改任何文件**。
 
 ---
 
@@ -103,12 +134,16 @@ Agent 读取 prompts/photographer.md
 ```
 Self-Media-Agent/
 ├── prompts/                          # Agent 的动作指令（Skills）
-│   ├── photographer.md               # /skill photographer — 创作
-│   ├── learn.md                      # /skill learn — 学习
-│   └── analyze.md                    # /skill analyze — 分析
+│   ├── photographer.md               # 创作
+│   ├── learn.md                      # 学习
+│   ├── analyze.md                    # 分析
+│   ├── seed.md                       # 手动注入
+│   ├── converge.md                   # 矛盾收敛
+│   ├── audit.md                      # 质量审计
+│   └── status.md                     # 状态查看
 │
 ├── wiki/                             # Agent 的记忆（持续演化）
-│   ├── persona.md                    # 角色画像主入口
+│   ├── persona.md
 │   ├── worldview.md
 │   ├── growth.md
 │   ├── references.md
@@ -117,15 +152,22 @@ Self-Media-Agent/
 │   └── knowledge/{photography,culture}.md
 │
 ├── schema/                           # Agent 的行为宪法（人类维护）
-│   ├── update-rules.md               # 学习行为唯一准则
-│   ├── dimensions.md                 # 七维度定义
-│   └── quality-bar.md                # 入库质量标准
+│   ├── update-rules.md
+│   ├── dimensions.md
+│   └── quality-bar.md
+│
+├── mcp/                              # 外部工具接口规范
+│   ├── README.md
+│   └── xiaohongshu.md
 │
 ├── raw/                              # 事实层（只追加，永不修改）
 │   └── YYYY-MM-DD-<post-id>.md
 │
-└── state/
-    └── last_run.json                 # Agent 的运行游标
+├── state/
+│   └── last_run.json                 # 运行游标
+│
+└── .github/workflows/
+    └── learn.yml                     # 定时 + 手动调度
 ```
 
 ---
@@ -147,10 +189,11 @@ Self-Media-Agent/
 |------|--------|
 | 开始创作 | [`prompts/photographer.md`](prompts/photographer.md) |
 | 理解学习流程 | [`prompts/learn.md`](prompts/learn.md) → [`schema/update-rules.md`](schema/update-rules.md) |
+| 手动注入帖子 | [`prompts/seed.md`](prompts/seed.md) |
+| 查看当前状态 | `/skill status` |
+| 配置 MCP | [`mcp/README.md`](mcp/README.md) |
 | 看角色当前画像 | [`wiki/persona.md`](wiki/persona.md) |
-| 理解维度边界 | [`schema/dimensions.md`](schema/dimensions.md) |
-| 理解入库标准 | [`schema/quality-bar.md`](schema/quality-bar.md) |
 
 ---
 
-**当前状态**：仓库骨架已就位，`raw/` 为空，`wiki/` 为占位模板。运行第一次 `/skill learn` 后，角色开始积累人格。
+**当前状态**：仓库骨架已就位，`raw/` 为空，`wiki/` 为占位模板。运行第一次 `/skill learn` 或 `/skill seed` 后，角色开始积累人格。

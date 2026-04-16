@@ -1,0 +1,110 @@
+name: Learn — Daily Knowledge Distillation
+
+# 两种触发方式：
+# 1. 定时调度（每天 UTC 02:00，北京时间 10:00）
+# 2. 手动触发（GitHub UI "Run workflow" 按钮，或 gh workflow run）
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '手动触发原因（可选，会记录在 commit 信息中）'
+        required: false
+        type: string
+        default: ''
+      skip_fetch:
+        description: '跳过 MCP 拉取（仅重写 persona.md）'
+        required: false
+        type: boolean
+        default: false
+
+# 需要写回仓库的权限
+permissions:
+  contents: write
+
+jobs:
+  learn:
+    name: Run /skill learn
+    runs-on: ubuntu-latest
+    # 防止并发运行导致 raw/ 和 wiki/ 写入冲突
+    concurrency:
+      group: learn
+      cancel-in-progress: false
+
+    steps:
+      # ── 1. 检出代码 ────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── 2. 运行 Learn Skill（通过 Claude Code Action）──────────
+      #
+      # 使用官方 claude-code-action，以 non-interactive 模式运行。
+      # Agent 将读取 prompts/learn.md → schema/update-rules.md，
+      # 自主完成完整的 10 步知识提炼流程。
+      #
+      # 前置条件：
+      #   - 在仓库 Settings → Secrets 中配置 ANTHROPIC_API_KEY
+      #   - 若使用小红书 MCP，还需配置 XHS_COOKIE（见 mcp/xiaohongshu.md）
+      #
+      - name: Run Learn Skill
+        uses: anthropics/claude-code-action@beta
+        with:
+          prompt: |
+            You are running the Self-Media-Agent learning pipeline.
+
+            Context:
+            - Repository: Self-Media-Agent (photographer persona knowledge base)
+            - Trigger: ${{ github.event_name == 'schedule' && 'scheduled daily run' || format('manual — {0}', inputs.reason || 'no reason given') }}
+            - Skip fetch: ${{ inputs.skip_fetch || 'false' }}
+
+            Instructions:
+            1. Read `prompts/learn.md` for the full skill instructions
+            2. Read `schema/update-rules.md` as the authoritative rule set
+            3. Execute the complete learning loop as described
+            4. If "skip_fetch" is true, skip Steps 2–3 and go directly to Step 9
+
+            After completing all steps, the workflow will automatically commit
+            any changes to raw/, wiki/, and state/ back to the repository.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # MCP 配置：取消注释并配置以启用小红书接入
+          # mcp_config: |
+          #   {
+          #     "mcpServers": {
+          #       "xiaohongshu": {
+          #         "command": "npx",
+          #         "args": ["-y", "mcp-server-xiaohongshu"],
+          #         "env": {
+          #           "XHS_COOKIE": "${{ secrets.XHS_COOKIE }}"
+          #         }
+          #       }
+          #     }
+          #   }
+
+      # ── 3. 提交变更 ────────────────────────────────────────────
+      - name: Commit changes
+        run: |
+          git config user.name  "Self-Media-Agent Bot"
+          git config user.email "bot@self-media-agent.local"
+
+          # 只暂存学习链路允许修改的目录
+          git add raw/ wiki/ state/
+
+          if git diff --staged --quiet; then
+            echo "No changes — wiki and persona already up to date."
+          else
+            TRIGGER="${{ github.event_name }}"
+            DATE=$(date -u +%Y-%m-%d)
+            if [ "$TRIGGER" = "schedule" ]; then
+              MSG="learn: ${DATE} — scheduled daily distillation"
+            else
+              REASON="${{ inputs.reason }}"
+              MSG="learn: ${DATE} — manual${REASON:+ (${REASON})}"
+            fi
+
+            git commit -m "$MSG"
+            git push
+            echo "Changes committed and pushed."
+          fi
