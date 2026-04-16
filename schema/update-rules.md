@@ -17,17 +17,20 @@
 
 ## 1. 每次运行的标准流程（Run Loop）
 
-每一轮 Cloud Routine 执行以下十步，顺序不可颠倒：
+每一轮 `/skill learn` 执行以下十步，顺序不可颠倒：
 
 ### Step 1 — 读取上下文
-- 打开 `state/last_run.json`，取出 `cursor`、`last_run_at`、`stats`
+- 打开 `state/last_run.json`，取出 `cursor`、`last_run_at`、`stats`、`search_keyword_index`
 - 打开 `schema/dimensions.md`、`schema/quality-bar.md`（本文件外的两份宪法）
 - 通读 `wiki/persona.md`（让自己"回到角色"）
 
 ### Step 2 — 拉取新素材
-- 通过小红书 MCP Connector，按 `cursor` 之后的时间顺序拉取一批高赞摄影帖子（建议 20–50 条）
-- 过滤：非摄影类、广告软文、低质转载 → 直接丢弃，不入 `raw/`
-- 保留字段：标题、正文、图片描述（若有）、点赞数、发布时间、作者、永久链接
+- 调用 `check_login_status` 确认 MCP 可用；不可用则跳至 Step 9
+- 调用 `search_feeds(keyword=<当前关键词>, sort_by="最多点赞", note_type="图文")`
+  - 当前关键词由 `search_keyword_index` 从 `mcp/xiaohongshu.md` 的关键词列表取得
+  - 若返回帖子的 content 字段被截断，追加调用 `get_feed_detail(feed_id, xsec_token, load_all_comments=false)`
+- 过滤：非摄影类、广告软文、低质转载、发布时间早于 cursor → 丢弃，不入 `raw/`
+- 保留字段：标题、正文、作者、点赞数、发布时间、feed_id、URL
 
 ### Step 3 — 写入 raw/（只追加）
 - 文件名：`raw/YYYY-MM-DD-<post-id>.md`
@@ -85,8 +88,9 @@
 更新字段：
 ```json
 {
-  "cursor": "<本轮最后处理的 post_id 或时间戳>",
+  "cursor": "<本轮最后处理的 feed_id 或发布时间戳>",
   "last_run_at": "<ISO8601>",
+  "search_keyword_index": "<下一轮从哪个关键词开始，整数>",
   "stats": {
     "posts_fetched": N,
     "posts_kept_to_raw": N,

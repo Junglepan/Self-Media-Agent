@@ -25,6 +25,7 @@ Schema  = 告诉 Agent "你是谁、怎么做事"（宪法）
 | Skill | 触发方式 | 做什么 |
 |-------|----------|--------|
 | `photographer` | `/skill photographer` | 用户描述场景，角色输出文案 |
+| `publish` | `/skill publish` | 将文案和图片发布到小红书 |
 | `learn` | `/skill learn` 或定时调度 | 消化新素材，提炼知识写入 wiki |
 | `analyze` | `/skill analyze` | 拆解一段文案的结构/技巧/审美 |
 | `seed` | `/skill seed` | 手动注入一篇帖子，立即提炼 |
@@ -52,7 +53,7 @@ Schema  = 告诉 Agent "你是谁、怎么做事"（宪法）
 用户描述场景
     │
     ▼
-/skill photographer ──► 检索 wiki/（只读）──► 输出文案
+/skill photographer ──► 检索 wiki/（只读）──► 输出文案 ──► /skill publish ──► 发布小红书
 /skill analyze      ──► 检索 wiki/（只读）──► 输出分析
 ```
 
@@ -129,15 +130,42 @@ gh workflow run learn.yml
 
 ---
 
+## 本地 MCP 配置
+
+`/skill learn` 和 `/skill publish` 依赖本地运行的小红书 MCP 服务。
+
+### 1. 启动 MCP 服务
+
+```bash
+# 首次：扫码登录
+./xiaohongshu-login
+
+# 后续：启动服务（默认监听 localhost:18060）
+./xiaohongshu-mcp
+```
+
+详细安装方式见 [xpzouying/xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)。
+
+### 2. 连接 Claude Code
+
+```bash
+claude mcp add --transport http xiaohongshu-mcp http://localhost:18060/mcp
+```
+
+执行一次即永久生效。之后在 Claude Code 中运行 `/skill status` 可确认连接状态。
+
+---
+
 ## 仓库结构
 
 ```
 Self-Media-Agent/
 ├── prompts/                          # Agent 的动作指令（Skills）
-│   ├── photographer.md               # 创作
-│   ├── learn.md                      # 学习
-│   ├── analyze.md                    # 分析
-│   ├── seed.md                       # 手动注入
+│   ├── photographer.md               # 创作文案
+│   ├── publish.md                    # 发布到小红书
+│   ├── learn.md                      # 学习（消化素材）
+│   ├── analyze.md                    # 分析文案
+│   ├── seed.md                       # 手动注入单篇
 │   ├── converge.md                   # 矛盾收敛
 │   ├── audit.md                      # 质量审计
 │   └── status.md                     # 状态查看
@@ -161,13 +189,15 @@ Self-Media-Agent/
 │   └── xiaohongshu.md
 │
 ├── raw/                              # 事实层（只追加，永不修改）
-│   └── YYYY-MM-DD-<post-id>.md
+│   └── YYYY-MM-DD-<feed-id>.md
 │
 ├── state/
-│   └── last_run.json                 # 运行游标
+│   └── last_run.json                 # 运行游标 + 关键词索引
 │
-└── .github/workflows/
-    └── learn.yml                     # 定时 + 手动调度
+├── .github/workflows/
+│   └── learn.yml                     # 定时 + 手动调度
+│
+└── .gitignore                        # 屏蔽 .claude/settings*.json
 ```
 
 ---

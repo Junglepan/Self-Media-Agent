@@ -1,161 +1,164 @@
 # MCP Spec — 小红书 Connector
 
-> 本文件定义 Agent 对小红书 MCP Server **期望的工具接口**。
-> 具体的 Server 实现可替换，但工具名、参数结构、返回格式必须符合本规范，否则 `/skill learn` 的 Step 2 将无法正确调用。
+> 基于 [xpzouying/xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)。
+> 这是一个**本地 HTTP 服务**，不是 npm 包——需要先在本机启动服务，再通过 HTTP 与 Claude Code 连接。
 
 ---
 
-## Server 标识
+## 架构
 
-```json
-{
-  "serverName": "xiaohongshu",
-  "requiredVersion": ">=1.0.0"
-}
+```
+Claude Code（Agent）
+      │  HTTP
+      ▼
+xiaohongshu-mcp 本地服务
+http://localhost:18060/mcp
+      │  Playwright（浏览器自动化）
+      ▼
+小红书网页
 ```
 
 ---
 
-## 工具列表
+## 安装与启动
 
-### 1. `xhs_search_posts`
+### 方式一：下载预编译二进制（推荐）
 
-按关键词搜索高赞帖子。`/skill learn` 的主要拉取工具。
+```bash
+# 从 GitHub Releases 下载对应平台的二进制
+# macOS ARM64 / Intel / Windows / Linux 均有提供
+
+# 首次运行：扫码登录（会打开浏览器）
+./xiaohongshu-login
+
+# 后续运行：无头模式启动服务
+./xiaohongshu-mcp
+# 或带界面调试：
+./xiaohongshu-mcp -headless=false
+```
+
+### 方式二：Docker（最简单）
+
+```bash
+docker compose up -d
+```
+
+服务启动后监听 `http://localhost:18060/mcp`。
+
+---
+
+## 连接 Claude Code
+
+```bash
+claude mcp add --transport http xiaohongshu-mcp http://localhost:18060/mcp
+```
+
+执行一次即可，配置会保存到 Claude Code 的全局设置中。
+
+验证连接：在 Claude Code 中调用 `check_login_status`，返回已登录状态即成功。
+
+---
+
+## 学习链路使用的工具
+
+`/skill learn` 的 Step 2 仅使用以下三个工具：
+
+### `check_login_status`
+
+**用途**：Step 2 开始前验证登录状态，不可用则降级。
+
+**参数**：无
+
+**返回**：登录状态（已登录 / 未登录 / 已过期）
+
+---
+
+### `search_feeds`
+
+**用途**：拉取高赞摄影帖子的主要工具。
 
 **参数**：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `keywords` | `string[]` | 是 | 搜索关键词列表，如 `["摄影", "街拍", "胶片"]` |
-| `sort` | `"popular" \| "latest"` | 否 | 排序方式，默认 `"popular"` |
-| `min_likes` | `number` | 否 | 最低点赞数，默认 `500` |
-| `limit` | `number` | 否 | 返回数量上限，默认 `20`，最大 `50` |
-| `after_cursor` | `string \| null` | 否 | 游标，用于分页（从 `state/last_run.json` 中取） |
+| `keyword` | `string` | 是 | 搜索关键词 |
+| `sort_by` | `string` | 否 | 默认 `"综合"`，学习链路用 `"最多点赞"` |
+| `note_type` | `string` | 否 | 默认 `"不限"`，用 `"图文"` 过滤图文帖 |
+| `publish_time` | `string` | 否 | `"不限"` / `"一天内"` / `"一周内"` / `"半年内"` |
 
-**返回**：
-
-```json
-{
-  "posts": [
-    {
-      "post_id": "string",
-      "title": "string",
-      "content": "string",
-      "author": "string",
-      "likes": 1234,
-      "posted_at": "2026-04-10T08:30:00Z",
-      "url": "https://www.xiaohongshu.com/explore/<post_id>",
-      "images": [
-        {
-          "url": "string",
-          "description": "string | null"
-        }
-      ],
-      "tags": ["string"]
-    }
-  ],
-  "next_cursor": "string | null",
-  "has_more": true
-}
+**学习链路推荐调用**：
+```
+search_feeds(keyword="<当前关键词>", sort_by="最多点赞", note_type="图文")
 ```
 
-**错误码**：
-
-| 代码 | 含义 | Agent 处理 |
-|------|------|-----------|
-| `AUTH_FAILED` | Cookie 失效 | 跳过 Step 2–3，降级运行 |
-| `RATE_LIMITED` | 请求过频 | 等待后重试一次，若仍失败则降级 |
-| `NO_RESULTS` | 无新结果 | 正常情况，记录 growth.md 后继续 |
+**返回字段（每条帖子）**：
+- `feed_id`、`xsec_token` — 后续调用 `get_feed_detail` 用
+- `title`、`content`（可能截断）、`author`
+- 点赞/收藏/评论数（用于过滤低质量帖）
 
 ---
 
-### 2. `xhs_get_post`
+### `get_feed_detail`
 
-获取单篇帖子的完整内容。用于拉取后补充详情（当 search 返回的 content 被截断时）。
+**用途**：拉取单篇帖子的完整正文（当 `search_feeds` 返回的 content 被截断时调用）。
 
 **参数**：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `post_id` | `string` | 是 | 帖子 ID |
+| `feed_id` | `string` | 是 | 从 `search_feeds` 结果中取 |
+| `xsec_token` | `string` | 是 | 从 `search_feeds` 结果中取 |
+| `load_all_comments` | `boolean` | 否 | 学习链路无需评论，传 `false` |
 
-**返回**：与 `xhs_search_posts` 的单条 `post` 对象格式相同，content 为完整正文。
+**返回**：完整正文、用户信息、点赞/收藏/分享/评论数。
 
-**错误码**：
+---
 
-| 代码 | 含义 | Agent 处理 |
-|------|------|-----------|
-| `POST_NOT_FOUND` | 帖子已删除 | 跳过该帖，记录 skip |
-| `POST_PRIVATE` | 帖子已设为私密 | 跳过该帖 |
+## 发布工具（`/skill publish` 使用）
+
+### `publish_content`
+
+**用途**：发布图文帖子到小红书。由 `/skill publish` 调用，学习链路不使用。
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 限制 |
+|------|------|------|------|
+| `title` | `string` | 是 | 最多 20 字 |
+| `content` | `string` | 是 | 最多 1000 字 |
+| `images` | `string[]` | 是 | HTTP/HTTPS 链接或本地绝对路径（推荐本地） |
+| `tags` | `string[]` | 否 | 话题标签，推荐填写 |
+| `schedule_at` | `string` | 否 | 定时发布，ISO8601 |
+| `visibility` | `string` | 否 | 公开 / 仅自己 |
+
+---
+
+## 搜索关键词轮转策略
+
+每次 `/skill learn` 从以下列表取一个关键词（轮转），避免重复搜索：
+
+```
+摄影    街拍    胶片摄影    人文摄影
+光影摄影  城市摄影  风景摄影  纪实摄影
+构图技巧  摄影文案  摄影日记  摄影故事
+```
+
+当前轮到的关键词索引存在 `state/last_run.json` 的 `search_keyword_index` 字段。
 
 ---
 
 ## 调用约束
 
-| 约束 | 值 | 说明 |
-|------|----|------|
-| 每次 Learn 最大搜索请求数 | 3 次 | 避免触发风控 |
-| 每次 Learn 最大获取帖子数 | 50 篇 | 对应 `xhs_search_posts` 的 `limit` 最大值 |
-| 最小调用间隔 | 2 秒 | 两次 MCP 调用之间等待 |
-| Cookie 轮换提醒 | 连续 3 次 `AUTH_FAILED` | 在 growth.md 记录"需要更新 Cookie" |
+| 约束 | 值 |
+|------|----|
+| 每次 Learn 最大 search 调用次数 | 3 次 |
+| 每次 Learn 最大拉取帖子数 | 50 篇 |
+| 两次 MCP 调用最小间隔 | 2 秒 |
 
 ---
 
-## 搜索策略（`/skill learn` Step 2 的推荐做法）
+## MCP 不可用的处理
 
-Agent 应按以下关键词组合轮流搜索，每轮 Learn 不必全部覆盖，**轮转使用**以保持素材多样性：
-
-```
-摄影          街拍          胶片摄影
-人文摄影      光影摄影      城市摄影
-风景摄影      纪实摄影      构图技巧
-摄影文案      摄影日记      摄影故事
-```
-
-每轮 Learn 从 `state/last_run.json` 的 `search_keyword_index` 取当前轮到的关键词（若无此字段，从第一个开始），执行后更新该索引。
-
----
-
-## 过滤规则（在调用返回后、写入 raw/ 前执行）
-
-Agent 在收到帖子列表后，自行判断过滤，以下情况**直接丢弃**：
-
-- 含 `#广告`、`#合作`、`#品牌合作人` 标签
-- 标题或正文含"领取优惠"、"扫码"、"私信报名"等商业话术
-- 内容明显为转载或搬运（正文 < 50 字且全为图片说明）
-- 帖子发布时间早于 `state/last_run.json` 的 `cursor`（已处理过的时间区间）
-
----
-
-## 配置示例（`.claude/settings.json`）
-
-```json
-{
-  "mcpServers": {
-    "xiaohongshu": {
-      "command": "npx",
-      "args": ["-y", "mcp-server-xiaohongshu"],
-      "env": {
-        "XHS_COOKIE": "<从浏览器开发者工具获取的 cookie 字符串>",
-        "XHS_USER_AGENT": "<可选，模拟的 User-Agent>"
-      }
-    }
-  }
-}
-```
-
-> Cookie 获取方式：登录小红书网页版 → 开发者工具 → Network → 任意请求 → 复制 `Cookie` 请求头值。
-> Cookie 有效期约 7–30 天，过期后需手动更新。
-
----
-
-## 本地测试
-
-在运行 `/skill learn` 前，可先验证 MCP 连接：
-
-```bash
-# 在 Claude Code 中调用
-xhs_search_posts(keywords=["摄影"], limit=3)
-```
-
-若返回帖子列表则连接正常；若返回 AUTH_FAILED 则需更新 Cookie。
+- `check_login_status` 返回未登录 → 跳过 Step 2–3，执行 Step 9
+- 服务未启动（连接失败） → 同上，在 growth.md 记录"MCP 不可用"
+- 不阻塞整轮运行，persona.md 照常更新
