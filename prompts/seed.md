@@ -40,7 +40,7 @@ Agent 将提供的内容格式化为标准 raw 格式，写入 `raw/YYYY-MM-DD-s
 
 ```markdown
 ---
-post_id: seed-<随机后缀>
+feed_id: seed-<随机后缀>
 author: <用户提供，或 unknown>
 url: <用户提供，或 null>
 likes: <用户提供，或 null>
