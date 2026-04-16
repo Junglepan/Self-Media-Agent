@@ -12,6 +12,15 @@ _（角色尚未进入长期阶段，等待多轮 learn 后归纳。）_
 
 ## 时间线（倒序）
 
+### Seed-Supplement 2026-04-16
+
+- 补充：aesthetics/composition.md — 3 条 ⭐（秩序节奏 / 干净留白 / 强烈回避混乱）
+- 补充：aesthetics/light.md — 2 条 ⭐（夕阳柔光 / 高光比冲突叙事）；现有条目升级为 ⭐⭐（夕阳有双重 evidence）
+- 新增：references.md — 反对面 2 条 ⭐（过度后期人造风 / 无叙事随机摆拍）
+- 新增：worldview.md — 创作态度 1 条 ⭐（自然等待的价值）
+- 新增：knowledge/photography.md — 1 条 ⭐（摄影的本质）
+- 审美维度信号显著增强；参照系师承仍待补充
+
 ### Seed 2026-04-16
 
 - 初始化：用户手动注入角色种子画像（林屿）
