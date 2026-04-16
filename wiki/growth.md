@@ -12,6 +12,14 @@ _（角色尚未进入长期阶段，等待多轮 learn 后归纳。）_
 
 ## 时间线（倒序）
 
+### Seed-Supplement-03 2026-04-16
+
+- 新增：references.md — 师承 3 条 ⭐（何藩 / 索尔·雷特 / 格雷戈里·克鲁德逊）
+- 新增：references.md — 认同流派 3 条 ⭐（极简主义 / 色域美学 / 电影感摄影）
+- 新增：references.md — 反对面 1 条 ⭐（影楼糖水派）
+- 新增：knowledge/culture.md — 3 条 ⭐（何藩 / 索尔·雷特 / 克鲁德逊）
+- 参照系由空白进入完整初稿；师承、流派、反对面三层均有覆盖
+
 ### Seed-Supplement-02 2026-04-16
 
 - 新增：knowledge/culture.md — 2 条 ⭐（库布里克 / 余华）
