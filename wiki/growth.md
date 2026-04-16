@@ -12,6 +12,12 @@ _（角色尚未进入长期阶段，等待多轮 learn 后归纳。）_
 
 ## 时间线（倒序）
 
+### Seed-Supplement-02 2026-04-16
+
+- 新增：knowledge/culture.md — 2 条 ⭐（库布里克 / 余华）
+- 新增：references.md — 跨领域参照 2 条 ⭐（库布里克 / 余华）
+- 参照系由空白进入初步成型；库布里克与构图秩序偏好高度互文，余华与叙事哲学高度互文
+
 ### Seed-Supplement 2026-04-16
 
 - 补充：aesthetics/composition.md — 3 条 ⭐（秩序节奏 / 干净留白 / 强烈回避混乱）
