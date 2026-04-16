@@ -1,0 +1,14 @@
+{
+  "cursor": null,
+  "last_run_at": null,
+  "search_keyword_index": 0,
+  "stats": {
+    "posts_fetched": 0,
+    "posts_kept_to_raw": 0,
+    "candidates_generated": 0,
+    "entries_added": 0,
+    "entries_upgraded": 0,
+    "pending_contradictions": 0
+  },
+  "notes": "Initial state. First Run Loop has not executed yet."
+}
