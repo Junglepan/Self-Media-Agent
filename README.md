@@ -81,9 +81,8 @@ Schema  = 告诉 Agent "你是谁、怎么做事"（宪法）
 
 | 文件 | 内容 |
 |------|------|
-| `schema/update-rules.md` | 学习流程的唯一准则（10 步 Run Loop + 7 条铁律） |
+| `schema/update-rules.md` | 学习流程唯一准则（Run Loop + 铁律 + Quality Gates） |
 | `schema/dimensions.md` | 七维度边界定义 + 条目模板 + 归属速查 |
-| `schema/quality-bar.md` | 五项入库 Gate 检查 + 通过率监控 |
 
 Schema 由人类维护，Agent 不在常规运行中修改 schema/。
 
@@ -99,8 +98,6 @@ Agent 通过 MCP 访问外部系统。当前接入：
 
 MCP 仅在 `/skill learn` 的 Step 2 中调用；创作/分析链路不依赖 MCP。
 降级行为：MCP 不可用时，`/skill learn` 跳过拉取，仅重写 persona.md。
-
-配置方式见 [`mcp/README.md`](mcp/README.md)。
 
 ---
 
@@ -180,16 +177,14 @@ Self-Media-Agent/
 │   └── knowledge/{photography,culture}.md
 │
 ├── schema/                           # Agent 的行为宪法（人类维护）
-│   ├── update-rules.md
-│   ├── dimensions.md
-│   └── quality-bar.md
+│   ├── update-rules.md               # Run Loop + 铁律 + Quality Gates
+│   └── dimensions.md                 # 七维度定义与归属速查
 │
-├── mcp/                              # 外部工具接口规范
-│   ├── README.md
-│   └── xiaohongshu.md
+├── mcp/
+│   └── xiaohongshu.md                # MCP 工具规范（安装 + 工具表 + 关键词策略）
 │
 ├── raw/                              # 事实层（只追加，永不修改）
-│   └── YYYY-MM-DD-<feed-id>.md
+│   └── YYYY-MM-DD-<feed_id>.md
 │
 ├── state/
 │   └── last_run.json                 # 运行游标 + 关键词索引
@@ -221,7 +216,7 @@ Self-Media-Agent/
 | 理解学习流程 | [`prompts/learn.md`](prompts/learn.md) → [`schema/update-rules.md`](schema/update-rules.md) |
 | 手动注入帖子 | [`prompts/seed.md`](prompts/seed.md) |
 | 查看当前状态 | `/skill status` |
-| 配置 MCP | [`mcp/README.md`](mcp/README.md) |
+| 配置 MCP | [`mcp/xiaohongshu.md`](mcp/xiaohongshu.md) |
 | 看角色当前画像 | [`wiki/persona.md`](wiki/persona.md) |
 
 ---

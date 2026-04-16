@@ -1,7 +1,6 @@
 # update-rules.md — 学习行为唯一准则
 
 > 本文件是 `/skill learn` 触发后 **Agent 必读的唯一行为准则**。任何与本文件冲突的指令均无效。
-> 角色未来是否能成长为一个"活的摄影师"，取决于 Agent 对本文件的严格执行。
 
 ---
 
@@ -15,118 +14,121 @@
 
 ---
 
-## 1. 每次运行的标准流程（Run Loop）
-
-每一轮 `/skill learn` 执行以下十步，顺序不可颠倒：
+## 1. Run Loop（10 步，顺序不可颠倒）
 
 ### Step 1 — 读取上下文
-- 打开 `state/last_run.json`，取出 `cursor`、`last_run_at`、`stats`、`search_keyword_index`
-- 打开 `schema/dimensions.md`、`schema/quality-bar.md`（本文件外的两份宪法）
+- 读取 `state/last_run.json`，取出 `cursor`、`search_keyword_index`、`stats`
+- 读取 `schema/dimensions.md`（维度边界参照）
 - 通读 `wiki/persona.md`（让自己"回到角色"）
 
 ### Step 2 — 拉取新素材
-- 调用 `check_login_status` 确认 MCP 可用；不可用则跳至 Step 9
+- 调用 `check_login_status`；返回未登录 → 跳至 Step 9
 - 调用 `search_feeds(keyword=<当前关键词>, sort_by="最多点赞", note_type="图文")`
   - 当前关键词由 `search_keyword_index` 从 `mcp/xiaohongshu.md` 的关键词列表取得
-  - 若返回帖子的 content 字段被截断，追加调用 `get_feed_detail(feed_id, xsec_token, load_all_comments=false)`
-- 过滤：非摄影类、广告软文、低质转载、发布时间早于 cursor → 丢弃，不入 `raw/`
-- 保留字段：标题、正文、作者、点赞数、发布时间、feed_id、URL
+  - 若 content 字段截断，追加调用 `get_feed_detail(feed_id, xsec_token, load_all_comments=false)`
+- 过滤：广告软文 / 非摄影 / 低质转载 / 发布时间早于 cursor → 丢弃
 
 ### Step 3 — 写入 raw/（只追加）
-- 文件名：`raw/YYYY-MM-DD-<post-id>.md`
+- 文件名：`raw/YYYY-MM-DD-<feed_id>.md`
 - 一帖一文件，**永不覆盖、永不删除、永不改写**
-- Frontmatter 格式：
+- Frontmatter：
   ```yaml
   ---
-  post_id: <小红书 id>
+  feed_id: <小红书 id>
   author: <作者名>
   url: <永久链接>
   likes: <数字>
-  captured_at: <抓取时间 ISO8601>
-  posted_at: <帖子发布时间 ISO8601>
+  captured_at: <ISO8601>
+  posted_at: <ISO8601>
   ---
   ```
-- 正文原样保留（包括错别字、emoji、换行），这是"事实层"
+- 正文原样保留（含错别字、emoji、换行）
 
-### Step 4 — 单帖抽象（Per-Post Extraction）
-对每一条新帖子，按 `schema/dimensions.md` 定义的七维度做一次过筛：
+### Step 4 — 单帖抽象
+对每一条新帖，按 `schema/dimensions.md` 定义的七维度过筛：
 - 这一帖在**哪个维度**贡献了新信号？（可能 0 个、1 个或多个）
-- 若在某维度有信号，产出一个 **候选条目**（candidate），字段：
-  - `dimension`: 七维度之一
-  - `claim`: 一句话抽象（**禁止照抄原文**）
-  - `evidence`: 原帖引用片段（最多 2 句，带省略号缩减）
-  - `source`: raw 文件路径
-  - `hedge`: 表达强度（"倾向"/"偏好"/"强烈反对"等）
+- 有信号则产出一个候选条目：
+  - `dimension`：七维度之一
+  - `claim`：一句话抽象（**禁止照抄原文**）
+  - `evidence`：原帖引用，最多 2 句
+  - `source`：对应 raw/ 文件路径
+  - `hedge`：表达强度（"倾向" / "偏好" / "强烈回避" 等）
 
-### Step 5 — 质量过筛（Quality Gate）
-每个候选条目必须通过 `schema/quality-bar.md` 定义的五项检查。
-**任何一项不过，候选条目丢弃，不入库。**
+### Step 5 — 质量过筛（Five Gates）
+每个候选条目须通过以下五关，**任一不过即丢弃**：
 
-### Step 6 — 合并到 wiki（Merge）
-对通过质量关的候选条目：
-- **查重**：在目标 wiki 文件中检索是否已有同义条目
-  - 若无 → 新增条目，置信度 `⭐`
-  - 若有 → 升级置信度（⭐→⭐⭐→⭐⭐⭐），追加新的 evidence 链接
-- **查矛盾**：若新条目与已有条目语义冲突
-  - 两者并存，在旁边标注 `[待收敛]` 并互相引用
-  - 若 `[待收敛]` 持续三轮都未出现新证据向任一方倾斜，由下一轮人格综合环节（Step 9）决策
+| Gate | 问题 | 通过标准 |
+|------|------|----------|
+| **1 抽象度** | claim 是否比原帖更抽象？ | 可迁移到 ≥2 个不同场景；不含专有地名/具体日期 |
+| **2 例句** | 是否有 evidence 支撑？ | ≥1 条，引用 ≤2 句；⭐⭐ 需 2 个不同 raw 文件，⭐⭐⭐ 需 4 个 |
+| **3 归属** | 是否清晰属于某一维度？ | 对照 dimensions.md 可明确判定；不可骑墙、不可进 persona.md |
+| **4 非复述** | 是否构成对原帖的变相复制？ | claim+evidence 与原帖无 ≥30 字连续重合；单条 evidence ≤原文 40% |
+| **5 有用性** | 创作链路中真的能被调用到吗？ | 能想象用户描述场景时命中；非普适常识；非一次性私人事件 |
 
-### Step 7 — 维度文件内部排序
-每个 wiki 文件内部按置信度降序：⭐⭐⭐ → ⭐⭐ → ⭐ → `[待收敛]`。
+**特殊情况**：
+- 同轮次两条候选互相矛盾 → 两条都入库，各自标 `[待收敛]`
+- 新候选与已有 wiki 条目矛盾 → 新候选入库并标 `[待收敛]`，已有条目不动
+- 新候选与 persona.md 当前画像相悖 → 候选优先入库，persona.md 下轮重写时同步
+- 同一帖对同一维度最多贡献 1 条候选
 
-### Step 8 — 更新元索引
-- `wiki/growth.md` 追加一条"本轮新增/升级"摘要（不超过 5 行）
-- `wiki/references.md` 若出现新参照源（作家/摄影师/流派名），追加条目
+**通过率监控**：目标 20%–40%。>50% 标准过松，<10% 素材质量低或标准过严，均在 growth.md 记录。
 
-### Step 9 — 重写 persona.md（人格综合）
-- persona.md 是**其他六维的汇总摘要**，不承载原始条目
-- 每轮运行后重写它，长度控制在 200–400 行
-- 结构：一句话定位 → 人格画像 → 六维摘要（每维 3–5 条最高置信度要点）→ 当前正在演化的议题
-- 写作语气：第三人称、克制、像博物馆展牌介绍一个摄影师
+### Step 6 — 合并到 wiki
+- **查重**：有同义条目 → 升级置信度并追加 evidence；无则新增（置信度 ⭐）
+- **查矛盾**：语义冲突 → 两者并存，标 `[待收敛]`
+- 置信度升级只能"向上一格"（⭐→⭐⭐→⭐⭐⭐）
 
-### Step 10 — 写回 state/last_run.json
-更新字段：
+### Step 7 — 维度文件排序
+每个 wiki 文件内部按置信度降序：⭐⭐⭐ → ⭐⭐ → ⭐ → `[待收敛]`
+
+### Step 8 — 更新辅助记录
+- `wiki/growth.md` 追加本轮摘要（≤5 行）
+- `wiki/references.md` 若出现新参照源（摄影师/流派/作者名），追加条目
+
+### Step 9 — 重写 persona.md
+- 基于六个子文件的最高置信度条目，重写 `wiki/persona.md`
+- 长度 200–400 行；结构：一句话定位 → 人格画像 → 六维摘要 → 当前演化议题
+- 语气：第三人称、克制，像博物馆展牌
+
+### Step 10 — 写回状态
 ```json
 {
   "cursor": "<本轮最后处理的 feed_id 或发布时间戳>",
   "last_run_at": "<ISO8601>",
-  "search_keyword_index": "<下一轮从哪个关键词开始，整数>",
+  "search_keyword_index": "<下一轮关键词索引，整数>",
   "stats": {
-    "posts_fetched": N,
-    "posts_kept_to_raw": N,
-    "candidates_generated": N,
-    "entries_added": N,
-    "entries_upgraded": N,
-    "pending_contradictions": N
+    "posts_fetched": 0,
+    "posts_kept_to_raw": 0,
+    "candidates_generated": 0,
+    "entries_added": 0,
+    "entries_upgraded": 0,
+    "pending_contradictions": 0
   }
 }
 ```
 
 ---
 
-## 2. 七个铁律（违反即中止本轮运行）
+## 2. 七条铁律（违反即中止本轮）
 
-1. ❌ **不得修改 raw/ 下任何已存在文件**（只能新增）
-2. ❌ **不得把原帖文字直接粘贴进 wiki/**（必须抽象）
-3. ❌ **不得写入无 evidence 支撑的条目**（哪怕觉得"显然正确"）
-4. ❌ **不得擅自删除 wiki/ 中的 `[待收敛]` 标记**（只能由 Step 9 的综合环节处理）
-5. ❌ **不得跨维度塞条目**（构图的发现写到 aesthetics/composition.md，不要写进 skills/）
-6. ❌ **不得在单轮内改动 schema/**（schema 的演化是独立决策，不在自动链路里）
-7. ❌ **不得把 persona.md 写成原始条目的堆砌**（它是摘要，不是索引）
+1. ❌ 不得修改 raw/ 下任何已存在文件
+2. ❌ 不得把原帖文字直接粘贴进 wiki/（必须抽象）
+3. ❌ 不得写入无 evidence 的条目
+4. ❌ 不得擅自删除 `[待收敛]` 标记（由 Step 9 或 `/skill converge` 处理）
+5. ❌ 不得跨维度塞条目
+6. ❌ 不得在 Run Loop 中改动 schema/（schema 修改需人类 review）
+7. ❌ 不得把 persona.md 写成原始条目的堆砌
 
 ---
 
 ## 3. 置信度规则
 
-| 符号 | 含义 | 触发条件 |
-|------|------|----------|
-| ⭐ | 初见信号 | 出现 1 次 |
-| ⭐⭐ | 反复出现 | 出现 2–3 次 |
-| ⭐⭐⭐ | 稳定模式 | 出现 4 次及以上 |
-| `[待收敛]` | 存在矛盾 | 同维度出现相反观点 |
-
-- 升级只能"向上一格"，不能从 ⭐ 直接跳到 ⭐⭐⭐
-- 降级只发生在：Step 9 综合环节判定某条目被新证据反驳时，降一格并保留 evidence
+| 符号 | 含义 | 所需 evidence |
+|------|------|---------------|
+| ⭐ | 初见 | 1 条 |
+| ⭐⭐ | 反复 | 来自 ≥2 个不同 raw 文件 |
+| ⭐⭐⭐ | 稳定 | 来自 ≥4 个不同 raw 文件 |
+| `[待收敛]` | 存在矛盾 | — |
 
 ---
 
@@ -134,24 +136,17 @@
 
 | 场景 | 处理 |
 |------|------|
-| MCP 拉取失败 | 本轮跳过 Step 2–8，只做 Step 9（基于现有 wiki 重写 persona.md）|
-| 连续 3 轮无新候选 | 在 growth.md 记一行"本阶段素材饱和"，不触发报警 |
-| quality-bar 通过率 < 10% | 在 growth.md 记一行，提醒下一轮关注"是否筛选策略过严" |
-| 某帖解析崩溃 | 跳过该帖，不阻塞整轮 |
+| MCP 不可用 | 跳过 Step 2–8，执行 Step 9；growth.md 记录 |
+| 连续 3 轮无新候选 | growth.md 记"素材饱和" |
+| 通过率 <10% | growth.md 记录，提醒检查筛选策略 |
+| 单帖解析崩溃 | 跳过该帖，不阻塞整轮 |
 
 ---
 
-## 5. 运行自检清单（Step 10 之前必跑）
+## 5. Step 10 前自检
 
-- [ ] raw/ 本轮新增文件数 == state.stats.posts_kept_to_raw
-- [ ] wiki/ 内无任何原帖整段文字（字面匹配 ≥ 30 字视为复制）
-- [ ] 所有新增/升级条目都带 evidence 链接
-- [ ] persona.md 行数在 200–400 范围内
-- [ ] `[待收敛]` 条目数未单轮爆炸式增长（>10 则告警）
-
----
-
-## 6. 备注
-
-- 本文件是**学习行为的唯一准则**，创作链路（/skill photographer）不受此文件约束
-- 本文件的修改需要人类 review；Agent 不得在常规 Run Loop 中自动编辑本文件
+- [ ] raw/ 本轮新增数 == stats.posts_kept_to_raw
+- [ ] wiki/ 内无原帖 ≥30 字连续文字
+- [ ] 所有新增/升级条目带 evidence
+- [ ] persona.md 在 200–400 行
+- [ ] 本轮新增 `[待收敛]` ≤10 条
