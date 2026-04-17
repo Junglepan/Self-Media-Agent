@@ -66,6 +66,7 @@ url: <永久链接>
 likes: <数字>
 captured_at: <ISO8601>
 posted_at: <ISO8601>
+tags: ["<话题标签1>", "<话题标签2>", ...]   # 来自 search_feeds / get_feed_detail 返回，原样保留
 images:
   - local: raw/YYYY-MM-DD/images/<feed_id>-1.webp
     url: <原始 CDN URL，仅供记录，可能失效>
@@ -146,6 +147,7 @@ images:
 ### Step 8 — 更新辅助记录
 - `wiki/growth.md` 追加本轮摘要（≤5 行）
 - `wiki/references.md` 若出现新参照源（摄影师/流派/作者名），追加条目
+- `wiki/skills/tags.md` 若本轮 raw 中出现**新的高赞 tag 组合模式**（该 tag 在 likes ≥ 1000 的帖子中反复出现），追加或升级对应条目；tags 的置信度规则同其他维度（⭐/⭐⭐/⭐⭐⭐ 按出现的不同 raw 文件数计）
 
 ### Step 9 — 重写 persona.md
 
