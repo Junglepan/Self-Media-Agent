@@ -71,7 +71,7 @@ Wiki 质量审计报告
 
 [⚠️ evidence 文件缺失] N 条
   - wiki/worldview.md — "记录是对抗遗忘的方式"
-    引用了不存在的 raw/2026-02-01-xyz.md
+    引用了不存在的 raw/xyz201.md
 
 [⚠️ 置信度虚高] N 条
   - wiki/knowledge/culture.md — "Saul Leiter 影响" ⭐⭐⭐

@@ -40,7 +40,7 @@
 |-------|------|------|
 | `photographer` | 创作文案 | 只读 wiki |
 | `publish` | 发布到小红书 | append `state/published.jsonl` |
-| `harvest` | 回流自己帖子互动数据 | append `raw/YYYY-MM-DD/harvest-*.md`，更新 `published.jsonl` |
+| `harvest` | 回流自己帖子互动数据 | append `raw/harvest-*.md`，更新 `published.jsonl` |
 | `learn` | 学习提炼（10 步 Run Loop） | `raw/`（append）+ `wiki/` + `state/last_run.json`（append run） |
 | `seed` | 手动注入单帖 | 同 learn |
 | `converge` | 处理 `[待收敛]` | 修改 `wiki/` + `persona.md` |
@@ -72,7 +72,7 @@
 
 ## 协作约束
 
-- **raw/ 目录结构**：`raw/YYYY-MM-DD/<feed_id>.md` + `raw/YYYY-MM-DD/images/<feed_id>-<n>.webp`（按日期分目录）
+- **raw/ 目录结构**：`raw/<feed_id>.md` + `raw/images/<feed_id>-<n>.webp`（扁平结构，feed_id 全局唯一）
 - **feed_id 去重**：学习链路 Step 2 会跳过已存在的 feed_id（见 update-rules）
 - **self_post 标注**：harvest 回流的 raw 带 `source: self_post`；后续 learn 提炼时 evidence 标 `（自验证）`
 - **语言**：默认中文回答（见全局 CLAUDE.md）

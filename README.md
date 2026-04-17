@@ -60,7 +60,7 @@ Schema  = 告诉 Agent "你是谁、怎么做事"（宪法）
 已发布的帖子
     │
     ▼
-/skill harvest ──► 拉取互动数据 ──► raw/YYYY-MM-DD/harvest-*.md ──► 下次 /skill learn 进入学习链路（标 [自验证]）
+/skill harvest ──► 拉取互动数据 ──► raw/harvest-*.md ──► 下次 /skill learn 进入学习链路（标 [自验证]）
 ```
 
 ---
@@ -202,9 +202,8 @@ Self-Media-Agent/
 │   └── xiaohongshu.md                # MCP 工具规范（安装 + 工具表 + 关键词策略）
 │
 ├── raw/                              # 事实层（只追加，永不修改）
-│   └── YYYY-MM-DD/                   # 按日期分目录，一帖一文件
-│       ├── <feed_id>.md
-│       └── images/<feed_id>-<n>.webp
+│   ├── <feed_id>.md                  # 一帖一文件，feed_id 全局唯一
+│   └── images/<feed_id>-<n>.webp
 │
 ├── state/
 │   ├── last_run.json                 # 顶层指针 + runs[] 历史流水（append-only）

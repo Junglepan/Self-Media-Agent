@@ -27,20 +27,20 @@
   - 当前关键词由 `search_keyword_index` 从 `mcp/xiaohongshu.md` 的关键词列表取得
   - 若 content 字段截断，追加调用 `get_feed_detail(feed_id, xsec_token, load_all_comments=false)`
 - 过滤（任一命中即丢弃）：
-  1. **feed_id 去重**：任意 `raw/*/<feed_id>.md` 已存在 → 丢弃（同一帖被不同关键词搜到时避免重复入库）
+  1. **feed_id 去重**：任意 `raw/<feed_id>.md` 已存在 → 丢弃（同一帖被不同关键词搜到时避免重复入库）
   2. 广告软文 / 非摄影 / 低质转载
   3. 发布时间早于 `cursor`
 
 ### Step 3 — 写入 raw/（只追加，含图片下载与视觉描述）
 
-**目录结构**：`raw/YYYY-MM-DD/<feed_id>.md`（按日期分目录，一帖一文件）
+**目录结构**：`raw/<feed_id>.md`（一帖一文件）
 **铁律**：永不覆盖、永不删除、永不改写
 
 **三步合一，按顺序同步完成**（不拆成独立轮次）：
 
 **3a — 下载图片**
 
-将帖子所有图片立即下载到 `raw/YYYY-MM-DD/images/<feed_id>-<n>.webp`。
+将帖子所有图片立即下载到 `raw/images/<feed_id>-<n>.webp`。
 
 - `xsec_token` 和 CDN URL 均有时效，必须在本步立即下载；后续步骤不再依赖原始 URL 访问图片
 - 直接调用下载接口或工具写入文件，**禁止经过打印/截断输出再二次解析**（截断会导致 URL 不完整，下载得到 0 字节文件）
@@ -68,7 +68,7 @@ captured_at: <ISO8601>
 posted_at: <ISO8601>
 tags: ["<话题标签1>", "<话题标签2>", ...]   # 来自 search_feeds / get_feed_detail 返回，原样保留
 images:
-  - local: raw/YYYY-MM-DD/images/<feed_id>-1.webp
+  - local: raw/images/<feed_id>-1.webp
     url: <原始 CDN URL，仅供记录，可能失效>
     description: <视觉描述，3b 步完成后写入>
     download_failed: false
@@ -189,7 +189,7 @@ images:
   "type": "learn",
   "date": "<YYYY-MM-DD>",
   "label": "<可选：本轮关键词或主题>",
-  "raw_files": ["raw/YYYY-MM-DD/<feed_id>.md", "..."],
+  "raw_files": ["raw/<feed_id>.md", "..."],
   "wiki_files_written": ["wiki/..."],
   "stats": {
     "posts_fetched": 0,

@@ -8,7 +8,7 @@
       "type": "seed",
       "date": "2026-04-16",
       "label": "Seed",
-      "raw_files": ["raw/2026-04-16/seed-persona.md"],
+      "raw_files": ["[seed 2026-04-16]"],
       "wiki_files_written": [
         "wiki/worldview.md",
         "wiki/skills/copywriting.md",
@@ -33,7 +33,7 @@
       "type": "seed",
       "date": "2026-04-16",
       "label": "Seed-Supplement",
-      "raw_files": ["raw/2026-04-16/seed-supplement-01.md"],
+      "raw_files": ["[seed 2026-04-16]"],
       "wiki_files_written": [
         "wiki/aesthetics/composition.md",
         "wiki/aesthetics/light.md",
@@ -55,7 +55,7 @@
       "type": "seed",
       "date": "2026-04-16",
       "label": "Seed-Supplement-02",
-      "raw_files": ["raw/2026-04-16/seed-supplement-02.md"],
+      "raw_files": ["[seed 2026-04-16]"],
       "wiki_files_written": [
         "wiki/knowledge/culture.md",
         "wiki/references.md"
@@ -75,7 +75,7 @@
       "type": "seed",
       "date": "2026-04-16",
       "label": "Seed-Supplement-03",
-      "raw_files": ["raw/2026-04-16/seed-supplement-03.md"],
+      "raw_files": ["[seed 2026-04-16]"],
       "wiki_files_written": [
         "wiki/knowledge/culture.md",
         "wiki/references.md"

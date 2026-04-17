@@ -55,9 +55,7 @@ get_feed_detail(feed_id=<post_id>, xsec_token=<从 url 提取>, load_all_comment
 
 返回字段包括：点赞数、收藏数、分享数、评论数、前 10 条一级评论。
 
-### 2c — 写入 `raw/YYYY-MM-DD/harvest-<post_id>.md`
-
-路径遵循 `schema/update-rules.md` Step 3 的目录结构（按日期分目录）。
+### 2c — 写入 `raw/harvest-<post_id>.md`
 
 ```yaml
 ---
@@ -111,7 +109,7 @@ images:
   "run_id": "harvest-<YYYYMMDD>-<顺序号>",
   "type": "harvest",
   "date": "<YYYY-MM-DD>",
-  "raw_files": ["raw/YYYY-MM-DD/harvest-<post_id>.md", "..."],
+  "raw_files": ["raw/harvest-<post_id>.md", "..."],
   "wiki_files_written": [],
   "stats": {
     "posts_fetched": <本轮扫描条数>,
