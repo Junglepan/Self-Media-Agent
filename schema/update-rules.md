@@ -17,7 +17,7 @@
 ## 1. Run Loop（10 步，顺序不可颠倒）
 
 ### Step 1 — 读取上下文
-- 读取 `state/last_run.json`，取出 `cursor`、`search_keyword_index`、`stats`
+- 读取 `state/last_run.json`，取出顶层指针 `cursor`、`search_keyword_index`；`runs[]` 是历史流水（append-only），本步不需要逐条读取，必要时可扫描末尾若干条了解最近轨迹
 - 读取 `schema/dimensions.md`（维度边界参照）
 - 通读 `wiki/persona.md`（让自己"回到角色"）
 
@@ -26,7 +26,10 @@
 - 调用 `search_feeds(keyword=<当前关键词>, sort_by="最多点赞", note_type="图文")`
   - 当前关键词由 `search_keyword_index` 从 `mcp/xiaohongshu.md` 的关键词列表取得
   - 若 content 字段截断，追加调用 `get_feed_detail(feed_id, xsec_token, load_all_comments=false)`
-- 过滤：广告软文 / 非摄影 / 低质转载 / 发布时间早于 cursor → 丢弃
+- 过滤（任一命中即丢弃）：
+  1. **feed_id 去重**：任意 `raw/*/<feed_id>.md` 已存在 → 丢弃（同一帖被不同关键词搜到时避免重复入库）
+  2. 广告软文 / 非摄影 / 低质转载
+  3. 发布时间早于 `cursor`
 
 ### Step 3 — 写入 raw/（只追加，含图片下载与视觉描述）
 
@@ -134,6 +137,8 @@ images:
 - **查重**：有同义条目 → 升级置信度并追加 evidence；无则新增（置信度 ⭐）
 - **查矛盾**：语义冲突 → 两者并存，标 `[待收敛]`
 - 置信度升级只能"向上一格"（⭐→⭐⭐→⭐⭐⭐）
+- **self_post evidence 标注**：若 evidence 来自 `source: self_post`（即 `/skill harvest` 回流的自己帖子），在 evidence 行末追加 `（自验证）` 后缀。区分"学别人"与"学自己"，方便后续 audit 分析
+- **self_post 的 Gate 5（有用性）可适度加权**：高互动的自验证信号（例如点赞 >1000 或评论中多次出现同一关键词）在"是否值得入库"上倾向保留。但**置信度升级仍按普通规则**——不因为是自己的帖子就自动 ⭐⭐
 
 ### Step 7 — 维度文件排序
 每个 wiki 文件内部按置信度降序：⭐⭐⭐ → ⭐⭐ → ⭐ → `[待收敛]`
@@ -167,11 +172,23 @@ images:
 **漂移触发条件**：原定位中的关键名词/形容词（如"纪实"、"街拍"、"黑白"）在新定位中消失，且没有对应的 ⭐⭐⭐ 证据支持这种变化。
 
 ### Step 10 — 写回状态
+
+**更新顶层指针**（覆盖）：
+
+- `cursor` = 本轮最后处理的 feed_id 或发布时间戳
+- `last_run_at` = ISO8601
+- `search_keyword_index` = 下一轮关键词索引（整数）
+
+**在 `runs[]` 末尾追加一条**（append，永不修改历史）：
+
 ```json
 {
-  "cursor": "<本轮最后处理的 feed_id 或发布时间戳>",
-  "last_run_at": "<ISO8601>",
-  "search_keyword_index": "<下一轮关键词索引，整数>",
+  "run_id": "learn-<YYYYMMDD>-<顺序号>",
+  "type": "learn",
+  "date": "<YYYY-MM-DD>",
+  "label": "<可选：本轮关键词或主题>",
+  "raw_files": ["raw/YYYY-MM-DD/<feed_id>.md", "..."],
+  "wiki_files_written": ["wiki/..."],
   "stats": {
     "posts_fetched": 0,
     "posts_kept_to_raw": 0,
@@ -179,9 +196,12 @@ images:
     "entries_added": 0,
     "entries_upgraded": 0,
     "pending_contradictions": 0
-  }
+  },
+  "notes": "<本轮简评，可选>"
 }
 ```
+
+**`type` 字段枚举**：`seed` / `learn` / `converge` / `harvest`（对应不同 skill 写入时的调用方）。其他 skill（audit / status / analyze / photographer）只读，不追加 run 记录。
 
 ---
 
@@ -237,7 +257,7 @@ images:
 
 ## 5. Step 10 前自检
 
-- [ ] raw/ 本轮新增数 == stats.posts_kept_to_raw
+- [ ] raw/ 本轮新增数 == 新追加 run 记录的 `stats.posts_kept_to_raw`
 - [ ] wiki/ 内无原帖 ≥30 字连续文字
 - [ ] 所有新增/升级条目带 evidence
 - [ ] persona.md 在 200–400 行

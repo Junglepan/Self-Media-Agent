@@ -25,7 +25,8 @@ Schema  = 告诉 Agent "你是谁、怎么做事"（宪法）
 | Skill | 触发方式 | 做什么 |
 |-------|----------|--------|
 | `photographer` | `/skill photographer` | 用户描述场景，角色输出文案 |
-| `publish` | `/skill publish` | 将文案和图片发布到小红书 |
+| `publish` | `/skill publish` | 将文案和图片发布到小红书，并记录到 `state/published.jsonl` |
+| `harvest` | `/skill harvest` | 拉取自己已发布帖子的互动数据回流到 `raw/`，闭环"学自己" |
 | `learn` | `/skill learn` 或定时调度 | 消化新素材，提炼知识写入 wiki |
 | `analyze` | `/skill analyze` | 拆解一段文案的结构/技巧/审美 |
 | `seed` | `/skill seed` | 手动注入一篇帖子，立即提炼 |
@@ -53,8 +54,13 @@ Schema  = 告诉 Agent "你是谁、怎么做事"（宪法）
 用户描述场景
     │
     ▼
-/skill photographer ──► 检索 wiki/（只读）──► 输出文案 ──► /skill publish ──► 发布小红书
+/skill photographer ──► 检索 wiki/（只读）──► 输出文案 ──► /skill publish ──► 发布小红书 ──► state/published.jsonl
 /skill analyze      ──► 检索 wiki/（只读）──► 输出分析
+
+已发布的帖子
+    │
+    ▼
+/skill harvest ──► 拉取互动数据 ──► raw/YYYY-MM-DD/harvest-*.md ──► 下次 /skill learn 进入学习链路（标 [自验证]）
 ```
 
 ---
@@ -101,29 +107,41 @@ MCP 仅在 `/skill learn` 的 Step 2 中调用；创作/分析链路不依赖 MC
 
 ---
 
-## 调度
+## 链路选择：本地 vs 云端
 
-### 自动调度（GitHub Actions）
+角色的所有 skill **默认在本地跑**（Claude Code 终端直接 `/skill <name>`），零外部依赖。
 
-`.github/workflows/learn.yml` 每天 **UTC 02:00**（北京时间 10:00）自动触发 `/skill learn`。
+云端（GitHub Actions）只是**可选的替代链路**——你想让 Actions 代跑时才用，不是硬依赖。
 
-### 手动调度
-
-两种方式均可：
+### 本地（推荐 · 默认）
 
 ```bash
-# 方式一：GitHub CLI
-gh workflow run learn.yml
-
-# 方式二：GitHub UI
-# Actions → Learn — Daily Knowledge Distillation → Run workflow
+/skill learn        # 完整学习（含小红书 MCP 抓取）
+/skill harvest      # 拉自己帖子的互动数据
+/skill audit        # wiki 健康度扫描
+/skill converge     # 处理 [待收敛]
+/skill status       # 系统状态速查
 ```
 
-也可以在 Claude Code 终端直接运行：
+### 云端（可选）
+
+`.github/workflows/learn.yml` 仅手动触发，支持 `audit` / `converge` / `learn` 三种任务。
+
+**前置（仅云端需要）**：仓库 Settings → Secrets → 配置 `ANTHROPIC_API_KEY`。
 
 ```bash
-/skill learn
+# GitHub CLI
+gh workflow run learn.yml -f task=audit
+gh workflow run learn.yml -f task=converge -f reason="处理积压矛盾"
+gh workflow run learn.yml -f task=learn -f reason="刷新 persona"
+
+# GitHub UI：Actions → Wiki Maintenance → Run workflow → 选 task
 ```
+
+**说明**：
+- 小红书 MCP 是本地 Playwright 服务（`localhost:18060`），云端跑不起来 → 云端 `learn` 跳过抓取步骤，相当于只做 persona refresh
+- 新素材请本地 `/skill learn` 后推送 `raw/`，云端可跑 `audit` / `converge` 处理
+- workflow 内置 cron 已注释，若要定时自动跑自行取消注释即可
 
 ---
 
@@ -184,10 +202,13 @@ Self-Media-Agent/
 │   └── xiaohongshu.md                # MCP 工具规范（安装 + 工具表 + 关键词策略）
 │
 ├── raw/                              # 事实层（只追加，永不修改）
-│   └── YYYY-MM-DD-<feed_id>.md
+│   └── YYYY-MM-DD/                   # 按日期分目录，一帖一文件
+│       ├── <feed_id>.md
+│       └── images/<feed_id>-<n>.webp
 │
 ├── state/
-│   └── last_run.json                 # 运行游标 + 关键词索引
+│   ├── last_run.json                 # 顶层指针 + runs[] 历史流水（append-only）
+│   └── published.jsonl               # 已发布帖子索引，harvest 的事实源（append-only）
 │
 ├── .github/workflows/
 │   └── learn.yml                     # 定时 + 手动调度

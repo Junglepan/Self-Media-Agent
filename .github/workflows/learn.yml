@@ -1,99 +1,120 @@
-name: Persona Refresh
+name: Wiki Maintenance
 
-# 两种触发方式：
-# 1. 定时调度（每天 UTC 02:00，北京时间 10:00）
-# 2. 手动触发（GitHub UI "Run workflow" 按钮，或 gh workflow run）
+# 【可选的云端链路 · 非硬依赖】
+#
+# 本 workflow 仅在用户手动触发时运行。
+# - 本地链路（推荐）：在 Claude Code 终端直接运行 /skill <name>，无需任何 GitHub 配置
+# - 云端链路（可选）：想让 GitHub Actions 代跑 audit / converge / learn 时，在仓库
+#   Settings → Secrets 中配置 ANTHROPIC_API_KEY，然后 workflow_dispatch 手动触发
+#
+# 刻意不配置定时 cron —— 避免未配 secret 的仓库出现红色失败告警。
+# 若你有明确的定时诉求（例如每周 audit 报告），自行取消下方 schedule 注释即可。
+#
+# on:
+#   schedule:
+#     - cron: '0 2 * * 1'    # 每周一 UTC 02:00
 on:
-  schedule:
-    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
+      task:
+        description: '运行哪个 skill'
+        required: true
+        type: choice
+        default: audit
+        options:
+          - audit
+          - converge
+          - learn
       reason:
-        description: '手动触发原因（可选，会记录在 commit 信息中）'
+        description: '触发原因（可选，会记录在 commit 信息中）'
         required: false
         type: string
         default: ''
-      skip_fetch:
-        description: '跳过 MCP 拉取（仅重写 persona.md）'
-        required: false
-        type: boolean
-        default: true
 
 # 需要写回仓库的权限
 permissions:
   contents: write
 
 jobs:
-  learn:
-    name: Run /skill learn
+  run:
+    name: Run /skill ${{ github.event.inputs.task }}
     runs-on: ubuntu-latest
-    # 防止并发运行导致 raw/ 和 wiki/ 写入冲突
     concurrency:
-      group: learn
+      group: wiki-maintenance
       cancel-in-progress: false
 
     steps:
-      # ── 1. 检出代码 ────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # ── 2. 运行 Learn Skill（通过 Claude Code Action）──────────
+      # ── 运行指定 Skill ────────────────────────────────────────
       #
-      # 使用官方 claude-code-action，以 non-interactive 模式运行。
-      # Agent 将读取 prompts/learn.md → schema/update-rules.md，
-      # 自主完成完整的 10 步知识提炼流程。
+      # 任务分派：
+      #   - audit：定时默认任务，纯读 wiki 出报告（不改文件）
+      #   - converge：处理 [待收敛] 矛盾（修改 wiki/ + persona.md）
+      #   - learn：手动触发时使用；云端无 MCP，相当于只做 persona refresh
       #
       # 前置条件：
-      #   - 在仓库 Settings → Secrets 中配置 ANTHROPIC_API_KEY
+      #   - 仓库 Settings → Secrets 中配置 ANTHROPIC_API_KEY
       #
-      # 注意：小红书 MCP（mcp/xiaohongshu.md）是本地 Playwright 服务
-      # （localhost:18060），无法在 GitHub Actions 云端环境中运行。
-      # 如需真实抓取，请在本地通过 /skill learn 执行，然后手动推送 raw/。
-      # 定时调度默认 skip_fetch=true，仅执行 wiki 重写步骤。
+      # 注意：小红书 MCP（localhost:18060）是本地 Playwright 服务，
+      # 无法在 GitHub Actions 运行。需要真实抓取素材请在本地
+      # 运行 /skill learn，再手动推送 raw/。
       #
-      - name: Run Learn Skill
+      - name: Run Skill
         uses: anthropics/claude-code-action@beta
         with:
           prompt: |
-            You are running the Self-Media-Agent learning pipeline.
+            You are running a maintenance task for Self-Media-Agent
+            (a photographer persona knowledge base).
 
             Context:
-            - Repository: Self-Media-Agent (photographer persona knowledge base)
-            - Trigger: ${{ github.event_name == 'schedule' && 'scheduled daily run' || format('manual — {0}', inputs.reason || 'no reason given') }}
-            - Skip fetch: ${{ inputs.skip_fetch || 'true' }}
+              Repository: Self-Media-Agent
+              Trigger:    manual — task=${{ github.event.inputs.task }}, reason=${{ github.event.inputs.reason || 'none' }}
+              Task:       ${{ github.event.inputs.task }}
 
-            Instructions:
-            1. Read `prompts/learn.md` for the full skill instructions
-            2. Read `schema/update-rules.md` as the authoritative rule set
-            3. Execute the complete learning loop as described
-            4. If "skip_fetch" is true, skip Steps 2–3 and go directly to Step 9
+            Instructions by task:
+              audit:
+                1. Read `prompts/audit.md` for the full skill instructions
+                2. Read `schema/update-rules.md` (authoritative rules) and `schema/dimensions.md` (for Gate 3 attribution)
+                3. Execute the audit and print the report to job output
+                4. Do NOT modify wiki/ or raw/ or state/
+                   (audit is read-only — any findings are reported, not auto-fixed)
 
-            After completing all steps, the workflow will automatically commit
-            any changes to raw/, wiki/, and state/ back to the repository.
+              converge:
+                1. Read `prompts/converge.md` for the full skill instructions
+                2. Read `schema/update-rules.md` and `schema/dimensions.md`
+                3. Execute the convergence workflow on all [待收敛] entries
+                4. Rewrite `wiki/persona.md` per Step 9 of update-rules
+
+              learn:
+                1. Read `prompts/learn.md` for the full skill instructions
+                2. Read `schema/update-rules.md` (authoritative rules)
+                3. MCP is NOT available in this environment —
+                   skip Steps 2–3 (fetch), go directly to Step 9 (rewrite persona.md)
+                4. Append a run record to state/last_run.json `runs[]`
+
+            After completion, the workflow will commit any file changes.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      # ── 3. 提交变更 ────────────────────────────────────────────
+      # ── 提交变更（仅 converge / learn 会产生变更；audit 是只读的）──
       - name: Commit changes
         run: |
           git config user.name  "Self-Media-Agent Bot"
           git config user.email "bot@self-media-agent.local"
 
-          # 只暂存学习链路允许修改的目录
-          git add raw/ wiki/ state/
+          # audit 是纯读操作，不写文件；converge / learn 会改 wiki/ + state/
+          git add wiki/ state/ raw/
 
           if git diff --staged --quiet; then
-            echo "No changes — wiki and persona already up to date."
+            echo "No changes — nothing to commit (expected for audit runs)."
           else
-            TRIGGER="${{ github.event_name }}"
+            TASK="${{ github.event.inputs.task }}"
             DATE=$(date -u +%Y-%m-%d)
-            if [ "$TRIGGER" = "schedule" ]; then
-              MSG="learn: ${DATE} — persona refresh"
-            else
-              REASON="${{ inputs.reason }}"
-              MSG="learn: ${DATE} — manual${REASON:+ (${REASON})}"
-            fi
+            REASON="${{ github.event.inputs.reason }}"
+            MSG="chore(${TASK}): ${DATE} — manual${REASON:+ (${REASON})}"
 
             git commit -m "$MSG"
             git push

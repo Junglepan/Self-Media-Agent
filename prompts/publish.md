@@ -73,7 +73,28 @@ publish_content(
 
 ---
 
-## 第四步 — 汇报结果
+## 第四步 — 记录到 `state/published.jsonl`（必做）
+
+**发布成功后，append 一条记录到 `state/published.jsonl`**（每行一个 JSON 对象，append-only）：
+
+```json
+{"post_id": "<MCP 返回的 id，或 null>", "url": "<MCP 返回的 url，或 null>", "title": "<标题>", "content": "<正文>", "images": ["<路径>"], "tags": ["<标签>"], "published_at": "<ISO8601>", "visibility": "公开", "skill_run_id": "<调用本次 publish 的上游 skill run_id，或 null>", "last_harvested_at": null, "harvest_runs": []}
+```
+
+**字段说明**：
+
+| 字段 | 说明 |
+|------|------|
+| `post_id` / `url` | MCP 若返回则记录；未返回先填 null，之后通过 `/skill harvest` 由用户补全 |
+| `skill_run_id` | 追溯本帖是哪次 `/skill photographer` 创作链路产出的（若有） |
+| `last_harvested_at` | 上次 `/skill harvest` 拉取互动数据的时间戳，初始 null |
+| `harvest_runs` | harvest 轮次记录（由 `/skill harvest` 追加） |
+
+**文件不存在**：首次发布时由 Agent 创建（空文件即可开始 append）。
+
+---
+
+## 第五步 — 汇报结果
 
 **成功**：
 ```
@@ -81,12 +102,14 @@ publish_content(
 ────────────────────────────────
 标题：<标题>
 发布时间：<立即发布的时间 / 定时时间>
+已记录到 state/published.jsonl（可稍后运行 /skill harvest 拉取互动数据）
 ────────────────────────────────
 ```
 
 **失败**：
 - 说明失败原因（标题超长 / 图片路径无效 / 未登录等）
 - 给出修正建议，不自动重试
+- **不 append 到 published.jsonl**（只有成功的发布才入列）
 
 ---
 
@@ -96,3 +119,4 @@ publish_content(
 - **不修改用户提供的标题/正文**——最多提示超限，由用户决定怎么改
 - **不绕过登录检查**——未登录时直接中止，不尝试其他方式
 - **发布成功不写入 wiki/**——发布是输出动作，不是学习动作
+- **发布成功必须 append `published.jsonl`**——实战反馈回流的唯一入口，断链则 harvest 无源可拉
