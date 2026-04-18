@@ -22,6 +22,8 @@
 - 通读 `wiki/persona.md`（让自己"回到角色"）
 
 ### Step 2 — 拉取新素材
+- 抓取冷却检查：读取 `state/last_run.json.mcp_fetch_last_at`
+  - 若 `now - mcp_fetch_last_at < 3 分钟`，本轮禁止调用 `search_feeds/get_feed_detail`，直接跳至 Step 9，并在 `wiki/growth.md` 记录"触发抓取冷却"
 - 调用 `check_login_status`；返回未登录 → 跳至 Step 9
 - 调用 `search_feeds(keyword=<当前关键词>, sort_by="最多点赞", note_type="图文")`
   - 当前关键词由 `search_keyword_index` 从 `mcp/xiaohongshu.md` 的关键词列表取得
@@ -180,6 +182,7 @@ images:
 - `cursor` = 本轮最后处理的 feed_id 或发布时间戳
 - `last_run_at` = ISO8601
 - `search_keyword_index` = 下一轮关键词索引（整数）
+- `mcp_fetch_last_at` = 本轮实际发生抓取时的时间（ISO8601）；若本轮未抓取则保持原值不变
 
 **在 `runs[]` 末尾追加一条**（append，永不修改历史）：
 

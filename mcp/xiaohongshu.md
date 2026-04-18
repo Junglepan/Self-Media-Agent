@@ -126,4 +126,5 @@ content 截断时调用，返回完整正文和互动数据。
 
 - 每轮最多 3 次 search 调用，最多拉取 50 篇
 - 两次调用间隔 ≥2 秒
+- 抓取冷却：两轮实际抓取之间间隔必须 ≥3 分钟（使用 `state/last_run.json.mcp_fetch_last_at` 判断）
 - 登录有效期约 7–30 天，过期后运行 `~/xiaohongshu-login` 重新扫码
